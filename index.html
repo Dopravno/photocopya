@@ -12,6 +12,7 @@ header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;
 header h1{font-size:18px;margin:0 0 0 auto;color:var(--ac)}
 button,select{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
 button:hover{border-color:var(--ac)}
+#rm:hover{border-color:#e5484d;color:#e5484d}
 button:focus-visible,select:focus-visible{outline:2px solid var(--ac)}
 main{max-width:1100px;margin:0 auto;padding:12px}
 #stage{position:relative;height:66vh;background:#000;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -37,6 +38,24 @@ th,td{padding:10px;border-bottom:1px solid var(--line);text-align:start}
 input[type=checkbox]{width:20px;height:20px}
 .warn{background:#3a2f12;border:1px solid var(--ac);border-radius:8px;padding:10px;margin-top:12px}
 .win{font-size:28px;text-align:center;padding:24px;color:var(--ac)}
+h2{font-size:18px;margin:28px 0 0}
+.pod{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+.pod figure{margin:0;flex:1 1 280px;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.pod figure:first-child{border-color:var(--ac)}
+.pod img{width:100%;height:280px;object-fit:contain;background:#000;cursor:zoom-in}
+.pod figcaption{display:flex;flex-direction:column;gap:2px;padding:10px}
+.pod figcaption span{color:var(--mut)}
+h3{font-size:16px;margin:18px 0 0;color:var(--ac)}
+ol{margin:6px 0 0;padding-inline-start:26px}
+li{margin:6px 0}
+.x{opacity:.45}
+.mut{color:var(--mut)}
+.add{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.add input{flex:1 1 180px;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit}
+.add input:focus{outline:2px solid var(--ac)}
+#gate{position:fixed;inset:0;z-index:10;background:#000e;overflow:auto;padding:16px}
+.gbox{max-width:760px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 20px 20px}
+#ok{background:var(--ac);color:#15171c;border-color:var(--ac);font-weight:700}
 </style>
 </head>
 <body>
@@ -44,8 +63,10 @@ input[type=checkbox]{width:20px;height:20px}
   <h1>مسابقة التصوير</h1>
   <select id="rs"></select>
   <button id="rb">النتائج</button>
+  <button id="jb">صفحة الحكم</button>
   <button id="ex">حفظ نسخة احتياطية</button>
   <button id="im">استيراد نسخة</button>
+  <button id="rm">حذف النتائج</button>
   <input type="file" id="fi" accept=".json" hidden>
 </header>
 <main>
@@ -61,7 +82,9 @@ input[type=checkbox]{width:20px;height:20px}
     <div id="chips"></div>
   </div>
   <div id="results" hidden></div>
+  <div id="judge" hidden></div>
 </main>
+<div id="gate" hidden></div>
 <script>
 /* ===== الإعدادات ===== */
 const VOTERS=['PA','MJ','ZE','MH','MA','MO','HS','MD','AS'];
@@ -71,35 +94,51 @@ const MAX=12,EXTS=['jpg','jpeg','png','webp'],KEY='photoContest.v1';
 
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 let st;try{st=JSON.parse(localStorage.getItem(KEY))}catch(e){}
-st=st||{round:0,seed:Math.random()*1e9|0,players:{round1:[...VOTERS]},scores:{},picks:{},pos:{}};
+const fresh=()=>({round:0,seed:Math.random()*1e9|0,people:VOTERS.map(c=>({c,n:NAMES[c],out:false})),players:{round1:[...VOTERS]},scores:{},picks:{},pos:{},rulesOk:false});
+const migrate=s=>{
+  s.people??=VOTERS.map(c=>({c,n:NAMES[c],out:false}));
+  s.rulesOk??=false;
+  for(const r in s.scores)for(const k in s.scores[r]){const v=s.scores[r][k];if(Array.isArray(v)){const o={};VOTERS.forEach((c,x)=>{if(v[x]!==undefined)o[c]=v[x]});s.scores[r][k]=o}}
+  return s;
+};
+st=migrate(st||fresh());
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}};
-let cur=0,rid='',photos=[],i=0;
+let cur=0,rid='',photos=[],i=0,view='viewer',dirty=false;
+const act=()=>st.people.filter(p=>!p.out),nm=c=>(st.people.find(p=>p.c===c)||{}).n||c;
+const full=v=>!!v&&act().every(q=>v[q.c]!==undefined&&v[q.c]!=='');
+const total=(v,o)=>act().reduce((a,q)=>q.c===o?a:a+ +v[q.c],0);
 
 /* ===== اكتشاف الصور: round/CODE/1.jpg ... (ويرجع لصور الجولة السابقة لو الفولدر فاضي) ===== */
 const tryLoad=s=>new Promise(r=>{const m=new Image();m.onload=()=>r(s);m.onerror=()=>r(null);m.src=s});
 async function scan(d,p){const o=[];for(let n=1;n<=MAX;n++){let s=null;for(const e of EXTS){s=await tryLoad(`${d}/${p}/${n}.${e}`);if(s)break}if(!s)break;o.push({key:p+'/'+n,owner:p,src:s})}return o}
-async function discover(){const out=[];await Promise.all(st.players[rid].map(async p=>{for(let r=cur;r>=0;r--){const l=await scan(ROUNDS[r].id,p);if(l.length){out.push(...l);break}}}));return out}
+async function discover(r0=cur){const out=[];await Promise.all(st.players[ROUNDS[r0].id].map(async p=>{for(let r=r0;r>=0;r--){const l=await scan(ROUNDS[r].id,p);if(l.length){out.push(...l);break}}}));return out}
 const hs=s=>{let x=2166136261;for(const c of s){x^=c.charCodeAt(0);x=Math.imul(x,16777619)}return x>>>0};
+function shuffle(list,seed){
+  let a=seed;const rnd=()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
+  const o=[...list].sort((x,y)=>x.key<y.key?-1:1);
+  for(let k=o.length-1;k>0;k--){const j=Math.floor(rnd()*(k+1));[o[k],o[j]]=[o[j],o[k]]}
+  return o;
+}
 
 async function open(r){
   cur=r;rid=ROUNDS[r].id;
-  $('#results').hidden=true;$('#viewer').hidden=false;$('#rb').textContent='النتائج';
+  setView('viewer');gate();
   $('#img').removeAttribute('src');$('#scores').innerHTML=$('#chips').innerHTML='';
   $('#cnt').textContent='جاري تحميل الصور…';
   $('#rs').innerHTML=ROUNDS.slice(0,st.round+1).map((x,k)=>`<option value="${k}"${k==r?' selected':''}>${x.t}</option>`).join('');
   const my=rid,list=await discover();if(my!==rid)return;
-  photos=list.sort((a,b)=>hs(st.seed+rid+a.key)-hs(st.seed+rid+b.key));
+  photos=shuffle(list,hs(st.seed+rid));
   i=Math.min(st.pos[rid]||0,Math.max(photos.length-1,0));
   photos.length?show():$('#cnt').textContent='لا توجد صور. ضعها في '+rid+'/PA/1.jpg وهكذا';
 }
 
 /* ===== العرض والتقييم ===== */
-const done=p=>{const v=(st.scores[rid]||{})[p.key];return !!v&&v.length==9&&v.every(x=>x!=='')};
+const done=p=>full((st.scores[rid]||{})[p.key]);
 function show(){
   const p=photos[i];st.pos[rid]=i;save();
   $('#img').src=p.src;$('#cnt').textContent=`صورة ${i+1} من ${photos.length}`;
-  const v=(st.scores[rid]||{})[p.key]||[];
-  $('#scores').innerHTML=VOTERS.map((q,k)=>`<label class="cell"><b>${q}</b><small>${NAMES[q]}</small><input type="number" min="0" max="10" step="0.5" value="${v[k]??''}"></label>`).join('');
+  const v=(st.scores[rid]||{})[p.key]||{};
+  $('#scores').innerHTML=act().map(q=>`<label class="cell"><b>${q.c}</b><small>${q.n}</small><input type="number" min="0" max="10" step="0.5" data-c="${q.c}" value="${v[q.c]??''}"></label>`).join('');
   chips();
   if(photos[i+1])new Image().src=photos[i+1].src;
 }
@@ -109,7 +148,7 @@ function go(d){if(!photos.length)return;const n=i+d;if(n<0||n>=photos.length)ret
 $('#scores').oninput=e=>{
   const el=e.target;
   if(el.value!==''){const x=Math.min(10,Math.max(0,+el.value));if(x!==+el.value)el.value=x}
-  const S=st.scores[rid]??={};S[photos[i].key]=$$('#scores input').map(n=>n.value);
+  const S=st.scores[rid]??={},o={};$$('#scores input').forEach(n=>o[n.dataset.c]=n.value);S[photos[i].key]=o;
   save();chips();
 };
 $('#chips').onclick=e=>{const k=e.target.dataset.k;if(k!=null){i=+k;show()}};
@@ -124,7 +163,7 @@ document.onkeydown=e=>{
     }
     return;
   }
-  if(!$('#results').hidden)return;
+  if(view!=='viewer'||!$('#gate').hidden)return;
   if(e.key==='ArrowRight')go(1);
   else if(e.key==='ArrowLeft')go(-1);
   else if(e.key==='f'||e.key==='F')toggleFs();
@@ -132,10 +171,10 @@ document.onkeydown=e=>{
 
 /* ===== النتائج (صوت صاحب الصورة لا يُحسب) ===== */
 function calc(){
-  const R={};st.players[rid].forEach(p=>R[p]={p,total:0,best:0,left:0});
+  const R={};st.players[rid].forEach(p=>R[p]={p,total:0,best:0,left:0,cnt:0});
   photos.forEach(ph=>{
-    const r=R[ph.owner];if(!done(ph)){r.left++;return}
-    const v=st.scores[rid][ph.key],s=VOTERS.reduce((a,q,k)=>q===ph.owner?a:a+ +v[k],0);
+    const r=R[ph.owner];r.cnt++;if(!done(ph)){r.left++;return}
+    const v=st.scores[rid][ph.key],s=total(v,ph.owner);
     r.total+=s;r.best=Math.max(r.best,s);
   });
   return Object.values(R).sort((a,b)=>b.total-a.total||b.best-a.best);
@@ -146,12 +185,17 @@ function results(){
   const tie=rs.length>adv&&rs[adv-1].total===rs[adv].total&&rs[adv-1].best===rs[adv].best;
   let h='';
   if(left)h+=`<div class="warn">باقي ${left} صورة بدون تقييم كامل، فالنتائج مؤقتة.</div>`;
+  const none=rs.filter(x=>!x.cnt).map(x=>x.p);
+  if(none.length)h+=`<div class="warn">لا توجد صور للمتسابق: ${none.join('، ')}. تأكد من اسم الفولدر.</div>`;
   if(tie)h+=`<div class="warn">تعادل تام عند حد التأهل (المجموع وأعلى صورة). اختر المتأهلين يدوياً بالعلامات.</div>`;
-  if(last&&!left&&pk.length==1)h+=`<div class="win">🏆 الفائز: <b>${pk[0]}</b> ${NAMES[pk[0]]}</div>`;
+  if(last&&!left&&pk.length==1)h+=`<div class="win">🏆 الفائز: <b>${pk[0]}</b> ${nm(pk[0])}</div>`;
   h+=`<table><tr><th>الترتيب</th><th>المتسابق</th><th>المجموع</th><th>أعلى صورة</th><th>${last?'الفائز':'يتأهل'}</th></tr>`+
-    rs.map((r,k)=>{const c=pk.includes(r.p);return `<tr class="${c?'q':''}"><td>${k+1}</td><td><b>${r.p}</b> ${NAMES[r.p]}</td><td>${r.total}</td><td>${r.best}</td><td><input type="checkbox" data-p="${r.p}"${c?' checked':''}></td></tr>`}).join('')+'</table>';
+    rs.map((r,k)=>{const c=pk.includes(r.p);return `<tr class="${c?'q':''}"><td>${k+1}</td><td><b>${r.p}</b> ${nm(r.p)}</td><td>${r.total}</td><td>${r.best}</td><td><input type="checkbox" data-p="${r.p}"${c?' checked':''}></td></tr>`}).join('')+'</table>';
   if(!last&&cur==st.round)h+=`<p><button id="nr">بدء ${ROUNDS[cur+1].t}</button> المتأهلون: ${pk.length} (المطلوب ${adv})</p>`;
+  const ended=last&&!left&&cur==st.round;
+  if(ended)h+='<div id="pod"></div>';
   const box=$('#results');box.innerHTML=h;
+  if(ended)podium().then(x=>{const d=$('#pod');if(d)d.innerHTML=x});
   box.onchange=e=>{const p=e.target.dataset.p;if(!p)return;const s=new Set(pk);e.target.checked?s.add(p):s.delete(p);st.picks[rid]=[...s];save();results()};
   const nr=$('#nr');
   if(nr)nr.onclick=()=>{
@@ -161,12 +205,111 @@ function results(){
     st.players[ROUNDS[cur+1].id]=pk;st.round=cur+1;save();open(cur+1);
   };
 }
-$('#rb').onclick=()=>{
-  const r=$('#results'),show=r.hidden;
-  r.hidden=!show;$('#viewer').hidden=show;
-  $('#rb').textContent=show?'عودة للصور':'النتائج';
-  if(show)results();
+/* ===== أعلى الصور تقييماً في كل الجولات (الصورة المتكررة تُحسب مرة بأعلى درجة) ===== */
+async function podium(){
+  const best=new Map();
+  for(let r=0;r<=st.round;r++){
+    const S=st.scores[ROUNDS[r].id]||{};
+    for(const ph of await discover(r)){
+      const v=S[ph.key];
+      if(!full(v))continue;
+      const s=total(v,ph.owner),o=best.get(ph.src);
+      if(!o||s>o.s)best.set(ph.src,{src:ph.src,owner:ph.owner,s});
+    }
+  }
+  const a=[...best.values()].sort((x,y)=>y.s-x.s);
+  if(!a.length)return '';
+  const t=a[Math.min(2,a.length-1)].s,W=['الأول','الثاني','الثالث'];
+  return '<h2>أعلى الصور تقييماً في المسابقة</h2><div class="pod">'+
+    a.filter((x,k)=>k<3||x.s===t).map(x=>`<figure><img src="${x.src}" alt="" onclick="this.requestFullscreen()"><figcaption><b>المركز ${W[a.findIndex(y=>y.s===x.s)]}</b><span>${x.s} من ${(act().length-1)*10}</span><span><b>${x.owner}</b> ${nm(x.owner)}</span></figcaption></figure>`).join('')+'</div>';
+}
+/* ===== الصفحات: المسابقة / النتائج / صفحة الحكم ===== */
+function setView(v){
+  view=v;
+  $('#viewer').hidden=v!=='viewer';$('#results').hidden=v!=='results';$('#judge').hidden=v!=='judge';
+  $('#rb').textContent=v==='results'?'عودة للصور':'النتائج';
+  $('#jb').textContent=v==='judge'?'عودة للمسابقة':'صفحة الحكم';
+  $('#rb').hidden=$('#rs').hidden=v==='judge';
+}
+$('#rb').onclick=()=>{if(view==='results')setView('viewer');else{setView('results');results()}};
+$('#jb').onclick=()=>{
+  if(view!=='judge'){setView('judge');judge();return}
+  if(dirty){dirty=false;open(cur)}else setView('viewer');
 };
+
+/* ===== القوانين ===== */
+function rulesHTML(){
+  const a=ROUNDS[0].adv,b=ROUNDS[1].adv;
+  const G=[
+    ['تجهيز الصور',[
+      'تُوضع صور كل جولة في فولدر الجولة (round1 ثم round2 ثم final)، وداخله فولدر لكل متسابق باسمه المختصر، وتُسمّى صوره 1.jpg و2.jpg وهكذا.',
+      'يشارك كل متسابق في الجولة الأولى بـ 5 صور من تصويره.'
+    ]],
+    ['العرض والسرية',[
+      'تُعرض كل الصور أمام الجميع في مكان واحد.',
+      'الصور مجهولة الهوية في كل الجولات، ولا يعرف صاحب أي صورة إلا صاحبها نفسه.',
+      '<b>لا يُسمح لأي متسابق بالتلميح إطلاقاً إلى أن صورة ما تخصه، ولا بأي تصرف يثير ولو أقل شك في أنها له (كالتعليق عليها أو ردّة فعل ظاهرة عند ظهورها).</b>'
+    ]],
+    ['التقييم',[
+      'يعطي كل المتسابقين كل صورة تقييماً من 10، ويدخل الحكم الدرجات في الجدول أسفل الصورة.',
+      'يقيّم صاحب الصورة صورته مثل غيره حفاظاً على سريتها، لكن تقييمه لصورته لا يُحتسب أبداً.',
+      'مجموع درجات الصورة (دون صوت صاحبها) هو نتيجتها، وتُحفظ.',
+      'نتيجة المتسابق في الجولة = مجموع نتائج صوره فيها.',
+      'يستمر كل المتسابقين في التصويت في كل الجولات حتى لو لم يتأهلوا.'
+    ]],
+    ['الجولات والفوز',[
+      `الجولة الأولى: يتأهل أعلى ${a} متسابقين.`,
+      'قبل الجولة الثانية يجوز للمتأهل تبديل صوره بصور جديدة، وإن لم يبدّلها تبقى صوره السابقة.',
+      `الجولة الثانية بنفس الطريقة، ويتأهل ${b} إلى النهائي.`,
+      'النهائي: يشارك كل متأهل بصورتين (أربع صور في المجموع) وبنفس طريقة التحكيم، ويفوز صاحب أعلى مجموع.',
+      'عند التعادل على آخر مقعد للتأهل يتقدم صاحب أعلى صورة منفردة، فإن استمر التعادل يقرر الحكم بتصويت إضافي.',
+      'بعد نهاية المسابقة تُعرض أعلى ثلاث صور تقييماً من بين كل المتسابقين مع أسماء أصحابها.'
+    ]],
+    ['صلاحيات الحكم',[
+      'للحكم إقصاء أي متسابق من صفحة الحكم، فيخرج من المسابقة بصوره وتُحذف تصويتاته السابقة.',
+      'للحكم إضافة متسابق جديد من صفحة الحكم: اسم فولدر صوره (المختصر) واسمه الكامل.'
+    ]]
+  ];
+  let n=0;
+  return G.map(([t,l])=>`<h3>${t}</h3><ol>${l.map(x=>`<li value="${++n}">${x}</li>`).join('')}</ol>`).join('');
+}
+function gate(){
+  const g=$('#gate');g.hidden=st.rulesOk;if(st.rulesOk)return;
+  g.innerHTML=`<div class="gbox"><h2>قوانين المسابقة</h2><p class="mut">اقرأ القوانين كاملة قبل بدء المسابقة.</p>${rulesHTML()}<p><button id="ok">قرأت القوانين وأبدأ المسابقة</button></p></div>`;
+  $('#ok').onclick=()=>{st.rulesOk=true;save();gate()};
+}
+
+/* ===== صفحة الحكم: المتسابقون ===== */
+function judge(){
+  const rows=st.people.map(p=>`<tr class="${p.out?'x':''}"><td><b>${p.c}</b></td><td>${p.n}</td><td>${p.out?'مُقصى':'في المسابقة'}</td><td>${p.out?'':`<button data-k="${p.c}">إقصاء</button>`}</td></tr>`).join('');
+  $('#judge').innerHTML=`<h2>المتسابقون</h2><table><tr><th>الاسم المختصر (الفولدر)</th><th>الاسم الكامل</th><th>الحالة</th><th></th></tr>${rows}</table>
+  <h2>إضافة متسابق</h2>
+  <div class="add"><input id="nc" dir="ltr" placeholder="اسم الفولدر المختصر، مثل PA"><input id="nn" placeholder="الاسم الكامل"><button id="na">إضافة متسابق</button></div>
+  <p class="mut">يدخل المتسابق الجديد ${ROUNDS[st.round].t}، وتوضع صوره في ${ROUNDS[st.round].id}/الاسم المختصر/1.jpg</p>
+  <h2>القوانين</h2>${rulesHTML()}`;
+  $('#judge').onclick=e=>{const k=e.target.dataset.k;if(k)kick(k)};
+  $('#na').onclick=addP;
+}
+function kick(c){
+  const p=st.people.find(x=>x.c===c);if(!p||p.out)return;
+  if(!confirm('إقصاء '+p.n+' ('+c+') من المسابقة؟\nسيخرج بصوره من المسابقة، وتُحذف كل الدرجات التي أعطاها سابقاً.\nيُفضّل حفظ نسخة احتياطية أولاً. متابعة؟'))return;
+  p.out=true;
+  for(const r in st.scores)for(const k in st.scores[r]){
+    if(k.startsWith(c+'/'))delete st.scores[r][k];else delete st.scores[r][k][c];
+  }
+  for(const r in st.players)st.players[r]=st.players[r].filter(x=>x!==c);
+  for(const r in st.picks)st.picks[r]=st.picks[r].filter(x=>x!==c);
+  save();dirty=true;judge();
+}
+function addP(){
+  const c=$('#nc').value.trim(),n=$('#nn').value.replace(/[<>&"]/g,'').trim();
+  if(!/^[A-Za-z0-9_-]+$/.test(c))return alert('اسم الفولدر: حروف إنجليزية وأرقام فقط، بدون مسافات.');
+  if(!n)return alert('اكتب الاسم الكامل للمتسابق.');
+  if(st.people.some(p=>p.c.toLowerCase()===c.toLowerCase()))return alert('هذا الاسم المختصر موجود مسبقاً.');
+  st.people.push({c,n,out:false});
+  (st.players[ROUNDS[st.round].id]??=[]).push(c);
+  save();dirty=true;judge();
+}
 $('#rs').onchange=e=>open(+e.target.value);
 
 /* ===== نسخة احتياطية ===== */
@@ -180,9 +323,16 @@ $('#fi').onchange=async e=>{
   try{
     const d=JSON.parse(await e.target.files[0].text());
     if(!d.players||!d.scores||d.round>=ROUNDS.length)throw 0;
-    st=d;save();open(st.round);
+    st=migrate(d);save();open(st.round);
   }catch(x){alert('ملف غير صالح')}
   e.target.value='';
+};
+
+$('#rm').onclick=()=>{
+  if(!confirm('سيتم حذف كل الدرجات والنتائج والمتأهلين نهائياً، والبدء من الجولة الأولى.\nيُفضّل حفظ نسخة احتياطية أولاً. متابعة؟'))return;
+  if(!confirm('تأكيد أخير: حذف كل شيء؟'))return;
+  try{localStorage.removeItem(KEY)}catch(e){}
+  st=fresh();save();open(0);
 };
 
 open(Math.min(st.round,ROUNDS.length-1));
