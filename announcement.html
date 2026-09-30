@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>إعلان مسابقة التصوير</title>
+<script>
+/* ✏️ عدّل القيم هنا فقط (اسم المنزل، التاريخ، الوقت) والصفحة كلها تتحدّث تلقائيًا */
+const CONFIG = {
+  house: "منزل عبدالرحمن",  // اسم المنزل
+  date:  "2026-10-31",      // التاريخ بصيغة: سنة-شهر-يوم
+  time:  "20:00"            // آخر موعد للحضور (نظام 24 ساعة)
+};
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#000;--card:#1e222b;--line:#2b303b;--ink:#eceef2;--muted:#8a92a0;--amber:#f5b13d;--font:"Tajawal","Noto Sans Arabic",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;padding:0 16px;background:var(--bg);color:var(--ink);font:400 16px/1.8 var(--font)}
+.card{max-width:640px;margin:16px auto;padding:22px 20px 26px;background:var(--card);border:1px solid var(--line);border-radius:16px}
+h1{margin:0 0 6px;font-size:22px;font-weight:700;line-height:1.6}
+.notice{margin:0 0 10px;font-weight:700}
+.lead{margin:14px 0 22px;color:var(--muted)}
+h2{margin:28px 0 10px;color:var(--amber);font-size:18px;font-weight:700;line-height:1.6}
+p{margin:0}
+dl{margin:0 0 8px}
+dl div{display:flex;gap:12px;padding:2px 0}
+dt{flex:0 0 118px;color:var(--muted)}
+dd{margin:0;font-weight:700}
+ol{margin:0;padding-inline-start:28px}
+li{margin:0 0 8px}
+li.strong{font-weight:700}
+.end{margin-top:30px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="card">
+
+<h1>إعلان مسابقة التصوير</h1>
+<p class="notice">لا تُقبل أي صورة يتم تصويرها بعد قراءتك لهذا السطر.</p>
+<p class="notice">يُمنع منعاً باتاً إخبار أي أحد بهذه المسابقة، تجنباً للحروب الاهلية!!، لأن عدداً من الأصدقاء لا يُسمح لهم بالمشاركة.</p>
+<p class="lead">اقرأ القوانين والشروط كاملة قبل الحضور.</p>
+
+<h2>الموعد والمكان</h2>
+<dl>
+  <div><dt>المكان</dt><dd data-fill="house">منزل عبدالرحمن</dd></div>
+  <div><dt>التاريخ</dt><dd><span data-fill="day">السبت</span> <bdi dir="ltr" data-fill="date">31/10/2026</bdi></dd></div>
+  <div><dt>الحضور</dt><dd>بعد صلاة العشاء</dd></div>
+  <div><dt> بحد أقصى</dt><dd data-fill="time">8:00 مساءً</dd></div>
+</dl>
+<p>تبدأ المسابقة مباشرة بعد هذا الموعد، ومن يتأخر لا يُقصى منها.</p>
+
+<h2>العرض والسرية</h2>
+<ol>
+  <li>تُعرض كل الصور أمام الجميع في مكان واحد، بترتيب عشوائي.</li>
+  <li>الصور مجهولة الهوية في كل الجولات، ولا يعرف صاحب أي صورة إلا صاحبها نفسه.</li>
+  <li class="strong">لا يُسمح لأي متسابق بالتلميح إطلاقاً إلى أن صورة ما تخصه، ولا بأي تصرف يثير ولو أقل شك في أنها له (كالتعليق عليها أو ردّة فعل ظاهرة عند ظهورها).</li>
+</ol>
+
+<h2>التقييم</h2>
+<ol start="4">
+  <li>يعطي كل المتسابقين كل صورة تقييماً من 10، ويدخل الحكم الدرجات في الجدول أسفل الصورة.</li>
+  <li>يقيّم صاحب الصورة صورته مثل غيره حفاظاً على سريتها، لكن تقييمه لصورته لا يُحتسب أبداً.</li>
+  <li>يجمع الحكم درجات كل صورة لتصبح درجتها، وتكون درجة المتسابق مجموع درجات صوره.</li>
+</ol>
+
+<h2>الجولات والنتيجة</h2>
+<ol start="7">
+  <li>الجولة الأولى: يشارك كل متسابق بـ 5 صور من تصويره (45 صورة في المجموع)، ويتأهل أعلى 4 متسابقين.</li>
+  <li>الجولة الثانية: بالطريقة نفسها، ويحق للمتأهلين استبدال صورهم بصور جديدة، ويتأهل أعلى متسابقين اثنين.</li>
+  <li>النهائي: يقدّم كل متأهل صورتين (4 صور في المجموع) وتُحكَّم بالطريقة نفسها، ويفوز متسابق واحد.</li>
+  <li>في ختام المسابقة تُعرض أعلى ثلاث صور تقييماً بين جميع المتسابقين.</li>
+  <li>المتسابق الذي يُقصى يخرج من المسابقة وتُحذف جميع أصواته السابقة.</li>
+</ol>
+
+<h2>شروط المشاركة</h2>
+<ol start="12">
+  <li>يجب أن تكون كل الصور من تصوير المتسابق نفسه، وإلا أُقصي من المسابقة.</li>
+  <li>لا تُقبل أي صورة التُقطت بعد تاريخ استلام صاحبها هذا الإعلان.</li>
+  <li>لا يظهر في أي صورة شخص يعرفه الأصدقاء (أصدقاء المجموعة الحاليون).</li>
+  <li>لا علامة مائية على الصور، ولا فلاتر أو تعديلات مبالغاً فيها.</li>
+  <li>يجهّز كل متسابق صور الجولة الثانية مسبقاً تحسباً لتأهله.</li>
+</ol>
+
+<p class="end">بالتوفيق للجميع.</p>
+
+</div>
+<script>
+(function(){
+  var p=CONFIG.date.split("-"), t=CONFIG.time.split(":"), h=+t[0], day="";
+  try{day=new Intl.DateTimeFormat("ar-u-ca-gregory",{weekday:"long"}).format(new Date(CONFIG.date+"T12:00:00"));}catch(e){}
+  var v={
+    house:CONFIG.house,
+    day:day,
+    date:p[2]+"/"+p[1]+"/"+p[0],
+    time:(h%12||12)+":"+t[1]+" "+(h<12?"صباحًا":"مساءً")
+  };
+  document.querySelectorAll("[data-fill]").forEach(function(el){
+    var val=v[el.getAttribute("data-fill")];
+    if(val) el.textContent=val;
+  });
+})();
+</script>
+</body>
+</html>

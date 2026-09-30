@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مسابقة التصوير</title>
+<style>
+:root{--bg:#15171c;--card:#1f232b;--line:#313846;--tx:#eef0f4;--mut:#8f99aa;--ac:#f0b23e;--ok:#3ecf8e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,"Segoe UI",Tahoma,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0 0 0 auto;color:var(--ac)}
+button,select{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--ac)}
+button:focus-visible,select:focus-visible{outline:2px solid var(--ac)}
+main{max-width:1100px;margin:0 auto;padding:12px}
+#stage{position:relative;height:66vh;background:#000;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#stage:fullscreen{height:100vh;border-radius:0;cursor:none}
+#stage:fullscreen .nav,#stage:fullscreen #fs,#stage:fullscreen #cnt{display:none}
+#img{max-width:100%;max-height:100%;object-fit:contain}
+.nav{position:absolute;top:50%;transform:translateY(-50%);font-size:26px;padding:14px 12px;background:#000a;border:0}
+#nx{right:8px}#pv{left:8px}
+#fs{position:absolute;top:8px;left:8px;background:#000a}
+#cnt{position:absolute;top:8px;right:8px;background:#000a;padding:4px 12px;border-radius:8px}
+#scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:12px}
+.cell{display:flex;flex-direction:column;gap:2px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px}
+.cell small{color:var(--mut)}
+.cell input{margin-top:4px;width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:20px;text-align:center}
+.cell input:focus{outline:2px solid var(--ac)}
+#chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:12px}
+#chips b{min-width:32px;text-align:center;padding:3px 6px;border-radius:6px;background:var(--card);border:1px solid var(--line);font-size:12px;font-weight:400;cursor:pointer}
+#chips b.ok{background:#1d4b37;border-color:var(--ok)}
+#chips b.cur{outline:2px solid var(--ac)}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{padding:10px;border-bottom:1px solid var(--line);text-align:start}
+.q td{background:#3a2f12}
+input[type=checkbox]{width:20px;height:20px}
+.warn{background:#3a2f12;border:1px solid var(--ac);border-radius:8px;padding:10px;margin-top:12px}
+.win{font-size:28px;text-align:center;padding:24px;color:var(--ac)}
+</style>
+</head>
+<body>
+<header>
+  <h1>مسابقة التصوير</h1>
+  <select id="rs"></select>
+  <button id="rb">النتائج</button>
+  <button id="ex">حفظ نسخة احتياطية</button>
+  <button id="im">استيراد نسخة</button>
+  <input type="file" id="fi" accept=".json" hidden>
+</header>
+<main>
+  <div id="viewer">
+    <div id="stage">
+      <img id="img" alt="">
+      <button class="nav" id="pv" aria-label="السابقة">❮</button>
+      <button class="nav" id="nx" aria-label="التالية">❯</button>
+      <button id="fs">ملء الشاشة</button>
+      <div id="cnt"></div>
+    </div>
+    <div id="scores"></div>
+    <div id="chips"></div>
+  </div>
+  <div id="results" hidden></div>
+</main>
+<script>
+/* ===== الإعدادات ===== */
+const VOTERS=['PA','MJ','ZE','MH','MA','MO','HS','MD','AS'];
+const NAMES={PA:'Abdalrhman',MJ:'Mjde',ZE:'Alzubir',MH:'Al_Mohnad',MA:'MAZZN',MO:'MOSAB',HS:'AL_HASSAN',MD:'MOHAMMED',AS:'AHMED'};
+const ROUNDS=[{id:'round1',t:'الجولة الأولى',adv:4},{id:'round2',t:'الجولة الثانية',adv:2},{id:'final',t:'النهائي',adv:1}];
+const MAX=12,EXTS=['jpg','jpeg','png','webp'],KEY='photoContest.v1';
+
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+let st;try{st=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+st=st||{round:0,seed:Math.random()*1e9|0,players:{round1:[...VOTERS]},scores:{},picks:{},pos:{}};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}};
+let cur=0,rid='',photos=[],i=0;
+
+/* ===== اكتشاف الصور: round/CODE/1.jpg ... (ويرجع لصور الجولة السابقة لو الفولدر فاضي) ===== */
+const tryLoad=s=>new Promise(r=>{const m=new Image();m.onload=()=>r(s);m.onerror=()=>r(null);m.src=s});
+async function scan(d,p){const o=[];for(let n=1;n<=MAX;n++){let s=null;for(const e of EXTS){s=await tryLoad(`${d}/${p}/${n}.${e}`);if(s)break}if(!s)break;o.push({key:p+'/'+n,owner:p,src:s})}return o}
+async function discover(){const out=[];await Promise.all(st.players[rid].map(async p=>{for(let r=cur;r>=0;r--){const l=await scan(ROUNDS[r].id,p);if(l.length){out.push(...l);break}}}));return out}
+const hs=s=>{let x=2166136261;for(const c of s){x^=c.charCodeAt(0);x=Math.imul(x,16777619)}return x>>>0};
+
+async function open(r){
+  cur=r;rid=ROUNDS[r].id;
+  $('#results').hidden=true;$('#viewer').hidden=false;$('#rb').textContent='النتائج';
+  $('#img').removeAttribute('src');$('#scores').innerHTML=$('#chips').innerHTML='';
+  $('#cnt').textContent='جاري تحميل الصور…';
+  $('#rs').innerHTML=ROUNDS.slice(0,st.round+1).map((x,k)=>`<option value="${k}"${k==r?' selected':''}>${x.t}</option>`).join('');
+  const my=rid,list=await discover();if(my!==rid)return;
+  photos=list.sort((a,b)=>hs(st.seed+rid+a.key)-hs(st.seed+rid+b.key));
+  i=Math.min(st.pos[rid]||0,Math.max(photos.length-1,0));
+  photos.length?show():$('#cnt').textContent='لا توجد صور. ضعها في '+rid+'/PA/1.jpg وهكذا';
+}
+
+/* ===== العرض والتقييم ===== */
+const done=p=>{const v=(st.scores[rid]||{})[p.key];return !!v&&v.length==9&&v.every(x=>x!=='')};
+function show(){
+  const p=photos[i];st.pos[rid]=i;save();
+  $('#img').src=p.src;$('#cnt').textContent=`صورة ${i+1} من ${photos.length}`;
+  const v=(st.scores[rid]||{})[p.key]||[];
+  $('#scores').innerHTML=VOTERS.map((q,k)=>`<label class="cell"><b>${q}</b><small>${NAMES[q]}</small><input type="number" min="0" max="10" step="0.5" value="${v[k]??''}"></label>`).join('');
+  chips();
+  if(photos[i+1])new Image().src=photos[i+1].src;
+}
+function chips(){$('#chips').innerHTML=photos.map((p,k)=>`<b class="${done(p)?'ok':''} ${k==i?'cur':''}" data-k="${k}">${k+1}</b>`).join('')}
+function go(d){if(!photos.length)return;const n=i+d;if(n<0||n>=photos.length)return;i=n;show()}
+
+$('#scores').oninput=e=>{
+  const el=e.target;
+  if(el.value!==''){const x=Math.min(10,Math.max(0,+el.value));if(x!==+el.value)el.value=x}
+  const S=st.scores[rid]??={};S[photos[i].key]=$$('#scores input').map(n=>n.value);
+  save();chips();
+};
+$('#chips').onclick=e=>{const k=e.target.dataset.k;if(k!=null){i=+k;show()}};
+$('#nx').onclick=()=>go(1);$('#pv').onclick=()=>go(-1);
+const toggleFs=()=>document.fullscreenElement?document.exitFullscreen():$('#stage').requestFullscreen();
+$('#fs').onclick=toggleFs;
+document.onkeydown=e=>{
+  if(e.target.matches('#scores input')){
+    if(e.key==='Enter'){
+      e.preventDefault();const a=$$('#scores input'),k=a.indexOf(e.target);
+      if(k<a.length-1){a[k+1].focus();a[k+1].select()}else{go(1);$('#scores input').focus()}
+    }
+    return;
+  }
+  if(!$('#results').hidden)return;
+  if(e.key==='ArrowRight')go(1);
+  else if(e.key==='ArrowLeft')go(-1);
+  else if(e.key==='f'||e.key==='F')toggleFs();
+};
+
+/* ===== النتائج (صوت صاحب الصورة لا يُحسب) ===== */
+function calc(){
+  const R={};st.players[rid].forEach(p=>R[p]={p,total:0,best:0,left:0});
+  photos.forEach(ph=>{
+    const r=R[ph.owner];if(!done(ph)){r.left++;return}
+    const v=st.scores[rid][ph.key],s=VOTERS.reduce((a,q,k)=>q===ph.owner?a:a+ +v[k],0);
+    r.total+=s;r.best=Math.max(r.best,s);
+  });
+  return Object.values(R).sort((a,b)=>b.total-a.total||b.best-a.best);
+}
+function results(){
+  const rs=calc(),adv=ROUNDS[cur].adv,last=cur==ROUNDS.length-1,left=rs.reduce((a,r)=>a+r.left,0);
+  const top=rs.slice(0,adv).map(r=>r.p),pk=st.picks[rid]||top;
+  const tie=rs.length>adv&&rs[adv-1].total===rs[adv].total&&rs[adv-1].best===rs[adv].best;
+  let h='';
+  if(left)h+=`<div class="warn">باقي ${left} صورة بدون تقييم كامل، فالنتائج مؤقتة.</div>`;
+  if(tie)h+=`<div class="warn">تعادل تام عند حد التأهل (المجموع وأعلى صورة). اختر المتأهلين يدوياً بالعلامات.</div>`;
+  if(last&&!left&&pk.length==1)h+=`<div class="win">🏆 الفائز: <b>${pk[0]}</b> ${NAMES[pk[0]]}</div>`;
+  h+=`<table><tr><th>الترتيب</th><th>المتسابق</th><th>المجموع</th><th>أعلى صورة</th><th>${last?'الفائز':'يتأهل'}</th></tr>`+
+    rs.map((r,k)=>{const c=pk.includes(r.p);return `<tr class="${c?'q':''}"><td>${k+1}</td><td><b>${r.p}</b> ${NAMES[r.p]}</td><td>${r.total}</td><td>${r.best}</td><td><input type="checkbox" data-p="${r.p}"${c?' checked':''}></td></tr>`}).join('')+'</table>';
+  if(!last&&cur==st.round)h+=`<p><button id="nr">بدء ${ROUNDS[cur+1].t}</button> المتأهلون: ${pk.length} (المطلوب ${adv})</p>`;
+  const box=$('#results');box.innerHTML=h;
+  box.onchange=e=>{const p=e.target.dataset.p;if(!p)return;const s=new Set(pk);e.target.checked?s.add(p):s.delete(p);st.picks[rid]=[...s];save();results()};
+  const nr=$('#nr');
+  if(nr)nr.onclick=()=>{
+    if(!pk.length)return alert('اختر متأهلاً واحداً على الأقل');
+    if(left&&!confirm('هناك صور ناقصة التقييم. متابعة؟'))return;
+    if(!confirm('بدء '+ROUNDS[cur+1].t+' بالمتأهلين: '+pk.join('، ')+' ؟'))return;
+    st.players[ROUNDS[cur+1].id]=pk;st.round=cur+1;save();open(cur+1);
+  };
+}
+$('#rb').onclick=()=>{
+  const r=$('#results'),show=r.hidden;
+  r.hidden=!show;$('#viewer').hidden=show;
+  $('#rb').textContent=show?'عودة للصور':'النتائج';
+  if(show)results();
+};
+$('#rs').onchange=e=>open(+e.target.value);
+
+/* ===== نسخة احتياطية ===== */
+$('#ex').onclick=()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(st,null,1)],{type:'application/json'}));
+  a.download='photo-contest-backup.json';a.click();
+};
+$('#im').onclick=()=>$('#fi').click();
+$('#fi').onchange=async e=>{
+  try{
+    const d=JSON.parse(await e.target.files[0].text());
+    if(!d.players||!d.scores||d.round>=ROUNDS.length)throw 0;
+    st=d;save();open(st.round);
+  }catch(x){alert('ملف غير صالح')}
+  e.target.value='';
+};
+
+open(Math.min(st.round,ROUNDS.length-1));
+</script>
+</body>
+</html>
